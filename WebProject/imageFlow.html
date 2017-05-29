@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<title>Documento</title>
+	<!-- Sofia2 API JS-->
+	<script type="text/javascript">
+		var pathToDwrServlet = 'https://sofia2.com/sib/dwr';
+		var pathToDwrServletAdmin = '/console/dwr';
+	</script>
+	<script type="text/javascript" src="https://sofia2.com/sib/dwr/engine.js">;</script>
+	<script type="text/javascript" src="https://sofia2.com/sib/dwr/util.js">;</script>
+	<script type="text/javascript" src="https://sofia2.com/sib/dwr/interface/GatewayDWR.js">;</script>
+	
+	<script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.min.js">;</script>
+	<script src="https://sofia2.com/console/resources/js/sofia2-api-js_v4.0.5.js"></script>
+	<script>
+		var token ="??????????????????????????????";
+		var kp ="imagePrKP";
+		var instance=kp+":kp_Instance";
+		function conectaSofia2(){
+			sofia2.joinToken(token, instance, function(mensajeSSAP){
+				if(mensajeSSAP != null && mensajeSSAP.body.data != null && mensajeSSAP.body.ok == true){
+					console.log("Conectado al SIB Correctamente");
+					sessionKey=mensajeSSAP.sessionKey;
+					//preparo el fichero
+					var dataFichero = new FormData();
+					dataFichero.append('binary', $("#imgUpload")[0].files[0]);
+					var urlPostFichero = "https://sofia2.com/sib/services/binaryRepository/"+sessionKey;
+					$.ajax({ 
+						url: urlPostFichero,
+						data: dataFichero,
+						cache: false,
+						contentType: false,
+						processData: false,
+						type: 'POST',
+						success: function(data){
+							//grabo el nombre del fichero en la ontologia
+							console.log(urlPostFichero + "/" + data)
+							window.idOriginal = data;
+							$.ajax({
+								url: 'https://sofia2.com/nodered/imageprocess/startImageFlow',
+								type: 'post',
+								dataType: 'json',
+								success: function (data) {
+									console.log("response OK");
+									
+								},
+								data: { 
+									"binaryID":data,
+									"sessionID":sessionKey
+								}
+							});
+							sofia2.subscribe("", "imgResultID", 500, 
+								function(subscriptionId) {//Callback subscripción
+									if (subscriptionId) {
+										console.log("Subscription OK: " + subscriptionId);
+									} else {
+										console.log("Subscription error");
+									}
+								},
+								function(ssap){
+									console.log(JSON.stringify(ssap));
+									var result = JSON.parse(JSON.parse(ssap).body.data)[0].imgResultID;
+									$("#original").attr('src', "https://sofia2.com/sib/services/binaryRepository/" + sessionKey + "/" + window.idOriginal);
+									$("#blur").attr('src', "https://sofia2.com/sib/services/binaryRepository/" + sessionKey + "/" + result.blurID);
+									$("#grey").attr('src', "https://sofia2.com/sib/services/binaryRepository/" + sessionKey + "/" + result.greyScaleID);
+									$("#blurAndGrey").attr('src', "https://sofia2.com/sib/services/binaryRepository/" + sessionKey + "/" + result.blurAndGreyID);
+									$("#histogram").attr('src','https://sofia2.com/console/dashboard/27d5348a-7e45-4263-8f6a-0bcbcaf2113f');
+								}
+							);
+						},
+						error:   function(data,status,er) {
+							console.log("Error subirFichero\n" + er);
+						}
+					});
+						
+				}else{
+					console.log("Error conectando del SIB");
+				}
+			});
+		}
+		$(function () {				
+			dwr.engine.setActiveReverseAjax(true);
+			dwr.engine.setErrorHandler(function(e){console.log(e)});
+			dwr.engine.setTimeout(0);
+		});
+	</script>
+</head>
+<body>
+	<div>
+		<input style="width:100%"  type="file" id="imgUpload" onchange="conectaSofia2()"/>
+		<img style="width:45%" id="original"/>
+		<img style="width:45%" id="blur"/>
+		<img style="width:30%" id="grey"/>
+		<img style="width:30%" id="blurAndGrey"/>
+		<iframe style="width:30%" id="histogram">
+	</div>
+</body>
+</html>
